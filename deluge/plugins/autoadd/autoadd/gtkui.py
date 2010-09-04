@@ -207,7 +207,6 @@ class OptionsDialog():
         options['download_location_toggle'] = self.glade.get_widget('download_location_toggle').get_active()
         options['label'] = self.glade.get_widget('label').get_text().lower()
         options['label_toggle'] = self.glade.get_widget('label_toggle').get_active()
-            
 
         for id in self.spin_ids:
             options[id] = self.glade.get_widget(id).get_value()
@@ -331,7 +330,6 @@ class GtkUI(GtkPluginBase):
             client.autoadd.set_options(watchdir_id, watchdir)
 
     def on_show_prefs(self):
-        
         client.autoadd.get_config().addCallback(self.cb_get_config)
         
     def on_options_changed_event(self):

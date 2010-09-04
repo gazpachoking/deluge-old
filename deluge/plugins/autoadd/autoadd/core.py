@@ -109,6 +109,7 @@ class Core(CorePluginBase):
             else:
                 # didn't find core watchdir, add it
                 self.add({'path':self.core_cfg['autoadd_location'], 'enabled':True})
+            self.core_cfg.save()
         deferLater(reactor, 5, self.enable_looping)
 
     def enable_looping(self):
@@ -130,7 +131,7 @@ class Core(CorePluginBase):
     def set_options(self, watchdir_id, options):
         """Update the options for a watch folder."""
         watchdir_id = str(watchdir_id)
-        options = self._clean_unicode(options)
+        options = self._make_unicode(options)
         CheckInput(watchdir_id in self.watchdirs , _("Watch folder does not exist."))
         if options.has_key('path'):
             options['abspath'] = os.path.abspath(options['path'])
@@ -194,7 +195,6 @@ class Core(CorePluginBase):
             if OPTIONS_AVAILABLE.get(option):
                 if watchdir.get(option+'_toggle', True):
                     opts[option] = value
-        opts = self._clean_unicode(opts)
         for filename in os.listdir(watchdir["abspath"]):
             if filename.split(".")[-1] == "torrent":
                 try:
@@ -289,21 +289,19 @@ class Core(CorePluginBase):
     @export()
     def get_watchdirs(self):
         return self.watchdirs.keys()
-    
-    def _clean_unicode(self, options):
+
+    def _make_unicode(self, options):
         opts = {}
         for key, value in options.iteritems():
-            if isinstance(key, unicode):
-                key = str(key)
-            if isinstance(value, unicode):
-                value = str(value)
+            if isinstance(value, str):
+                value = unicode(value, 'utf-8')
             opts[key] = value
         return opts
 
     @export()
     def add(self, options={}):
         """Add a watch folder."""
-        options = self._clean_unicode(options)
+        options = self._make_unicode(options)
         abswatchdir = os.path.abspath(options['path'])
         CheckInput(os.path.isdir(abswatchdir) , _("Path does not exist."))
         CheckInput(os.access(abswatchdir, os.R_OK|os.W_OK), "You must have read and write access to watch folder.")
