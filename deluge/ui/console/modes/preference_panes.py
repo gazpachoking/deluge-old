@@ -232,11 +232,7 @@ class DownloadsPane(BasePane):
 
         self.add_header("Allocation",True)
 
-        if parent.core_config["compact_allocation"]:
-            alloc_idx = 1
-        else:
-            alloc_idx = 0
-        self.add_select_input("compact_allocation",None,["Use Full Allocation","Use Compact Allocation"],[False,True],alloc_idx)
+        self.add_checked_input("full_allocation","Pre-allocate files",parent.core_config["full_allocation"])
         self.add_header("Options",True)
         self.add_checked_input("prioritize_first_last_pieces","Prioritize first and last pieces of torrent",parent.core_config["prioritize_first_last_pieces"])
         self.add_checked_input("add_paused","Add torrents in paused state",parent.core_config["add_paused"])

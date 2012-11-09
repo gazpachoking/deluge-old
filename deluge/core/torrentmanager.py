@@ -88,7 +88,8 @@ class TorrentState:
             time_added=-1,
             last_seen_complete=0.0,   # 0 is the default returned when the info
             owner="",                 # does not exist on lt >= .16
-            shared=False
+            shared=False,
+            full_allocation=False
         ):
         self.torrent_id = torrent_id
         self.filename = filename
@@ -103,6 +104,7 @@ class TorrentState:
 
         # Options
         self.compact = compact
+        self.full_allocation = full_allocation
         self.paused = paused
         self.save_path = save_path
         self.max_connections = max_connections
@@ -381,7 +383,8 @@ class TorrentManager(component.Component):
             options["prioritize_first_last_pieces"] = state.prioritize_first_last
             options["sequential_download"] = state.sequential_download
             options["file_priorities"] = state.file_priorities
-            options["compact_allocation"] = state.compact
+            options["compact_allocation"] = state.compact # Deprecated
+            options["full_allocation"] = state.full_allocation
             options["download_location"] = state.save_path
             options["auto_managed"] = state.auto_managed
             options["stop_at_ratio"] = state.stop_at_ratio
@@ -462,8 +465,8 @@ class TorrentManager(component.Component):
         log.debug("options: %s", options)
 
         # Set the right storage_mode
-        if options["compact_allocation"]:
-            storage_mode = lt.storage_mode_t(2)
+        if options["full_allocation"]:
+            storage_mode = lt.storage_mode_t(0)
         else:
             storage_mode = lt.storage_mode_t(1)
 
@@ -739,7 +742,8 @@ class TorrentManager(component.Component):
                 torrent.time_added,
                 torrent.get_last_seen_complete(),
                 torrent.owner,
-                torrent.options["shared"]
+                torrent.options["shared"],
+                torrent.options["full_allocation"]
             )
             state.torrents.append(torrent_state)
 

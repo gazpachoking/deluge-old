@@ -146,7 +146,7 @@ class AddTorrentDialog(component.Component):
 
         # Get default config values from the core
         self.core_keys = [
-            "compact_allocation",
+            "full_allocation",
             "max_connections_per_torrent",
             "max_upload_slots_per_torrent",
             "max_upload_speed_per_torrent",
@@ -391,10 +391,8 @@ class AddTorrentDialog(component.Component):
             self.builder.get_object("entry_move_completed_path").set_text(
                 options["move_completed_path"])
 
-        self.builder.get_object("radio_full").set_active(
-            not options["compact_allocation"])
-        self.builder.get_object("radio_compact").set_active(
-            options["compact_allocation"])
+        self.builder.get_object("chk_full_allocation").set_active(
+            options["full_allocation"])
         self.builder.get_object("spin_maxdown").set_value(
             options["max_download_speed"])
         self.builder.get_object("spin_maxup").set_value(
@@ -437,16 +435,8 @@ class AddTorrentDialog(component.Component):
                 self.builder.get_object("entry_download_path").get_text()
             options["move_completed_path"] = \
                 self.builder.get_object("entry_move_completed_path").get_text()
-        options["compact_allocation"] = \
-            self.builder.get_object("radio_compact").get_active()
-
-        if options["compact_allocation"]:
-            # We need to make sure all the files are set to download
-            def set_download_true(model, path, itr):
-                model[path][0] = True
-            self.files_treestore.foreach(set_download_true)
-            self.update_treeview_toggles(self.files_treestore.get_iter_first())
-
+        options["full_allocation"] = \
+            self.builder.get_object("chk_full_allocation").get_active()
         options["max_download_speed"] = \
             self.builder.get_object("spin_maxdown").get_value()
         options["max_upload_speed"] = \
@@ -499,10 +489,8 @@ class AddTorrentDialog(component.Component):
             self.builder.get_object("entry_move_completed_path").set_text(
                 self.core_config["move_completed_path"])
 
-        self.builder.get_object("radio_compact").set_active(
-            self.core_config["compact_allocation"])
-        self.builder.get_object("radio_full").set_active(
-            not self.core_config["compact_allocation"])
+        self.builder.get_object("chk_full_allocation").set_active(
+            self.core_config["full_allocation"])
         self.builder.get_object("spin_maxdown").set_value(
             self.core_config["max_download_speed_per_torrent"])
         self.builder.get_object("spin_maxup").set_value(
@@ -534,22 +522,6 @@ class AddTorrentDialog(component.Component):
 
     def _on_file_toggled(self, render, path):
         # Check to see if we can change file priorities
-        (model, row) = self.listview_torrents.get_selection().get_selected()
-        if self.options[model[row][0]]["compact_allocation"]:
-            def on_answer(response):
-                if response == gtk.RESPONSE_YES:
-                    self.options[model[row][0]]["compact_allocation"] = False
-                    self.update_torrent_options(model[row][0])
-
-            d = dialogs.YesNoDialog(
-                _("Unable to set file priority!"),
-                _("File prioritization is unavailable when using Compact "
-                  "allocation.  Would you like to switch to Full allocation?"),
-                self.dialog
-            ).run()
-            d.addCallback(on_answer)
-
-            return
         (model, paths) = self.listview_files.get_selection().get_selected_rows()
         if len(paths) > 1:
             for path in paths:

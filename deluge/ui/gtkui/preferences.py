@@ -298,10 +298,8 @@ class Preferences(component.Component):
                     ("active", self.core_config["del_copy_torrent_file"]),
                 "torrent_files_button": \
                     ("filename", self.core_config["torrentfiles_location"]),
-                "radio_compact_allocation": \
-                    ("active", self.core_config["compact_allocation"]),
-                "radio_full_allocation": \
-                    ("not_active", self.core_config["compact_allocation"]),
+                "chk_full_allocation": \
+                    ("active", self.core_config["full_allocation"]),
                 "chk_prioritize_first_last_pieces": \
                     ("active",
                         self.core_config["prioritize_first_last_pieces"]),
@@ -459,8 +457,7 @@ class Preferences(component.Component):
                 "chk_copy_torrent_file",
                 "chk_del_copy_torrent_file",
                 "torrent_files_button",
-                "radio_compact_allocation",
-                "radio_full_allocation",
+                "chk_full_allocation",
                 "chk_prioritize_first_last_pieces",
                 "chk_sequential_download",
                 "chk_add_paused",
@@ -638,16 +635,15 @@ class Preferences(component.Component):
             new_core_config["torrentfiles_location"] = \
                 self.builder.get_object("entry_torrents_path").get_text()
 
-        new_core_config["compact_allocation"] = \
-            self.builder.get_object("radio_compact_allocation").get_active()
+        new_core_config["full_allocation"] = \
+            self.builder.get_object("chk_full_allocation").get_active()
         new_core_config["prioritize_first_last_pieces"] = \
             self.builder.get_object(
                 "chk_prioritize_first_last_pieces").get_active()
         new_core_config["sequential_download"] = \
             self.builder.get_object("chk_sequential_download").get_active()
         new_core_config["sequential_download"] = \
-            self.builder.get_object("radio_compact_allocation").get_active() and \
-            False or self.builder.get_object("chk_sequential_download").get_active()
+            self.builder.get_object("chk_sequential_download").get_active()
         new_core_config["add_paused"] = \
             self.builder.get_object("chk_add_paused").get_active()
 

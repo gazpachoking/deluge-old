@@ -86,7 +86,8 @@ class TorrentOptions(dict):
             "max_download_speed": "max_download_speed_per_torrent",
             "prioritize_first_last_pieces": "prioritize_first_last_pieces",
             "sequential_download": "sequential_download",
-            "compact_allocation": "compact_allocation",
+            "compact_allocation": "compact_allocation", # Deprecated
+            "full_allocation": "full_allocation",
             "download_location": "download_location",
             "auto_managed": "auto_managed",
             "stop_at_ratio": "stop_seed_at_ratio",
@@ -682,6 +683,7 @@ class Torrent(object):
             "active_time": self.status.active_time,
             "all_time_download": self.status.all_time_download,
             "compact": self.options["compact_allocation"],
+            "full_allocation": self.options["full_allocation"],
             "distributed_copies": distributed_copies,
             "download_payload_rate": self.status.download_payload_rate,
             "file_priorities": self.options["file_priorities"],
