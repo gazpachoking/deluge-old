@@ -100,27 +100,16 @@ Deluge.preferences.Downloads = Ext.extend(Ext.FormPanel, {
             title: _('Allocation'),
             autoHeight: true,
             labelWidth: 1,
-            defaultType: 'radiogroup',
+            defaultType: 'checkbox',
             style: 'margin-bottom: 5px; margin-top: 0; padding-bottom: 5px; padding-top: 0;',
             width: 240
         });
-        optMan.bind('compact_allocation', fieldset.add({
-            name: 'compact_allocation',
+        optMan.bind('full_allocation', fieldset.add({
+            name: 'full_allocation',
+            height: 22,
             width: 200,
             labelSeparator: '',
-            //disabled: true,
-            defaults: {
-                width: 80,
-                height: 22,
-                name: 'compact_allocation'
-            },
-            items: [{
-                boxLabel: _('Use Full'),
-                inputValue: false
-            }, {
-                boxLabel: _('Use Compact'),
-                inputValue: true
-            }]
+            boxLabel: _('Pre-allocate files')
         }));
     
         fieldset = this.add({

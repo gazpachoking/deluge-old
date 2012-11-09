@@ -77,30 +77,15 @@ Deluge.add.OptionsTab = Ext.extend(Ext.form.FormPanel, {
             title: _('Allocation'),
             border: false,
             autoHeight: true,
-            defaultType: 'radio',
+            defaultType: 'checkbox',
             width: 100
         });
 
-        this.optionsManager.bind('compact_allocation', fieldset.add({
-            xtype: 'radiogroup',
-            columns: 1,
-            vertical: true,
-            labelSeparator: '',
-            items: [{
-                name: 'compact_allocation',
-                value: false,
-                inputValue: false,
-                boxLabel: _('Full'),
-                fieldLabel: '',
-                labelSeparator: ''
-            }, {
-                name: 'compact_allocation',
-                value: true,
-                inputValue: true,
-                boxLabel: _('Compact'),
-                fieldLabel: '',
-                labelSeparator: ''
-            }]
+        this.optionsManager.bind('full_allocation', fieldset.add({
+            name: 'full_allocation',
+            boxLabel: _('Pre-allocate files'),
+            fieldLabel: '',
+            labelSeparator: ''
         }));
 
         fieldset = panel.add({
@@ -157,7 +142,7 @@ Deluge.add.OptionsTab = Ext.extend(Ext.form.FormPanel, {
     },
 
     getDefaults: function() {
-        var keys = ['add_paused','compact_allocation','download_location',
+        var keys = ['add_paused','full_allocation','download_location',
         'max_connections_per_torrent','max_download_speed_per_torrent',
         'max_upload_slots_per_torrent','max_upload_speed_per_torrent',
         'prioritize_first_last_pieces'];
@@ -167,7 +152,7 @@ Deluge.add.OptionsTab = Ext.extend(Ext.form.FormPanel, {
                 var options = {
                     'file_priorities': [],
                     'add_paused': config.add_paused,
-                    'compact_allocation': config.compact_allocation,
+                    'full_allocation': config.full_allocation,
                     'download_location': config.download_location,
                     'max_connections': config.max_connections_per_torrent,
                     'max_download_speed': config.max_download_speed_per_torrent,
