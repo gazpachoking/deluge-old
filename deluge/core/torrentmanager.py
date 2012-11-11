@@ -466,9 +466,9 @@ class TorrentManager(component.Component):
 
         # Set the right storage_mode
         if options["full_allocation"]:
-            storage_mode = lt.storage_mode_t(0)
+            storage_mode = lt.storage_mode_t.storage_mode_allocate
         else:
-            storage_mode = lt.storage_mode_t(1)
+            storage_mode = lt.storage_mode_t.storage_mode_sparse
 
         # Fill in the rest of the add_torrent_params dictionary
         add_torrent_params["save_path"] = utf8_encoded(options["download_location"])
