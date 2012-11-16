@@ -628,7 +628,8 @@ class Client(object):
         config = config.encode(sys.getfilesystemencoding())
         try:
             if deluge.common.windows_check():
-                subprocess.Popen("deluged --port=%s --config=\"%s\"" % (port, config))
+                subprocess.Popen("deluged --port=%s --config=\"%s\"" % (port, config),
+                    creationflags=0x08000000)
             elif deluge.common.osx_check():
                 subprocess.call(["nohup", "deluged", "--port=%s" % port, "--config=%s" % config])
             else:
