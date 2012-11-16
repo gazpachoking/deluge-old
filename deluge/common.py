@@ -769,5 +769,12 @@ def unicode_argv():
             return [argv[i] for i in
                     xrange(start, argc.value)]
     else:
-        # On other platforms, decode the arguments using sys.stdin.encoding
-        [arg.decode(sys.stdin.encoding) for arg in sys.argv[1:]]
+        # On other platforms, we have to find the likely encoding of the args and decode
+        # First check if sys.stdout or stdin have encoding set
+        encoding = getattr(sys.stdout, "encoding") or getattr(sys.stdin, "encoding")
+        # If that fails, check what the locale is set to
+        encoding = encoding or locale.getpreferredencoding()
+        # As a last resort, just default to utf-8
+        encoding = encoding or "utf-8"
+
+        return [arg.decode(encoding) for arg in sys.argv]
