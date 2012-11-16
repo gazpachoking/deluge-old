@@ -625,15 +625,16 @@ class Client(object):
         :raises OSError: received from subprocess.call()
 
         """
-        config = config.encode(sys.getfilesystemencoding())
+        command = ["deluged",
+                   "--port=%s" % port,
+                   "--config=%s" % config.encode(sys.getfilesystemencoding())]
         try:
             if deluge.common.windows_check():
-                subprocess.Popen("deluged --port=%s --config=\"%s\"" % (port, config),
-                    creationflags=0x08000000)
+                subprocess.Popen(command, creationflags=0x08000000)
             elif deluge.common.osx_check():
-                subprocess.call(["nohup", "deluged", "--port=%s" % port, "--config=%s" % config])
+                subprocess.call(["nohup"] + command)
             else:
-                subprocess.call(["deluged", "--port=%s" % port, "--config=%s" % config])
+                subprocess.call(command)
         except OSError, e:
             from errno import ENOENT
             if e.errno == ENOENT:
