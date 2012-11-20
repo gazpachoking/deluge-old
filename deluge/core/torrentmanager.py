@@ -42,6 +42,7 @@ import time
 import shutil
 import operator
 import re
+from ctypes import ArgumentError
 
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
@@ -419,9 +420,16 @@ class TorrentManager(component.Component):
             # before adding to the session.
             if options["mapped_files"]:
                 for index, fname in options["mapped_files"].items():
+                    try:
+                        fname = unicode(fname, "utf-8")
+                    except TypeError:
+                        pass
                     fname = deluge.core.torrent.sanitize_filepath(fname)
                     log.debug("renaming file index %s to %s", index, fname)
-                    torrent_info.rename_file(index, utf8_encoded(fname))
+                    try:
+                        torrent_info.rename_file(index, fname)
+                    except ArgumentError:
+                        torrent_info.rename_file(index, fname.encode("utf-8"))
 
             add_torrent_params["ti"] = torrent_info
             add_torrent_params["resume_data"] = ""

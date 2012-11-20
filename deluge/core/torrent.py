@@ -934,8 +934,17 @@ class Torrent(object):
         """Renames files in the torrent. 'filenames' should be a list of
         (index, filename) pairs."""
         for index, filename in filenames:
+            # Make sure filename is a unicode object
+            try:
+                filename = unicode(filename, "utf-8")
+            except TypeError:
+                pass
             filename = sanitize_filepath(filename)
-            self.handle.rename_file(index, filename.encode("utf-8"))
+            # libtorrent needs unicode object if wstrings are enabled, utf8 bytestring otherwise
+            try:
+                self.handle.rename_file(index, filename)
+            except ArgumentError:
+                self.handle.rename_file(index, filename.encode("utf-8"))
 
     def rename_folder(self, folder, new_folder):
         """Renames a folder within a torrent.  This basically does a file rename
