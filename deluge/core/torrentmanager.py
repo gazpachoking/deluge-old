@@ -42,7 +42,6 @@ import time
 import shutil
 import operator
 import re
-from ctypes import ArgumentError
 
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
@@ -428,7 +427,7 @@ class TorrentManager(component.Component):
                     log.debug("renaming file index %s to %s", index, fname)
                     try:
                         torrent_info.rename_file(index, fname)
-                    except ArgumentError:
+                    except TypeError:
                         torrent_info.rename_file(index, fname.encode("utf-8"))
 
             add_torrent_params["ti"] = torrent_info

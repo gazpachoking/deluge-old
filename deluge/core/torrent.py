@@ -38,7 +38,6 @@ import os
 import time
 from urllib import unquote
 from urlparse import urlparse
-from ctypes import ArgumentError
 
 from deluge._libtorrent import lt
 
@@ -855,7 +854,7 @@ class Torrent(object):
             # libtorrent needs unicode object if wstrings are enabled, utf8 bytestring otherwise
             try:
                 self.handle.move_storage(dest)
-            except ArgumentError:
+            except TypeError:
                 self.handle.move_storage(dest_bytes)
         except Exception, e:
             log.error("Error calling libtorrent move_storage: %s" % e)
@@ -943,7 +942,7 @@ class Torrent(object):
             # libtorrent needs unicode object if wstrings are enabled, utf8 bytestring otherwise
             try:
                 self.handle.rename_file(index, filename)
-            except ArgumentError:
+            except TypeError:
                 self.handle.rename_file(index, filename.encode("utf-8"))
 
     def rename_folder(self, folder, new_folder):
