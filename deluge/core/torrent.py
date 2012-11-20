@@ -38,6 +38,7 @@ import os
 import time
 from urllib import unquote
 from urlparse import urlparse
+from ctypes import ArgumentError
 
 from deluge._libtorrent import lt
 
@@ -834,29 +835,30 @@ class Torrent(object):
 
     def move_storage(self, dest):
         """Move a torrent's storage location"""
-
-        if deluge.common.windows_check():
-            # Attempt to convert utf8 path to unicode
-            # Note: Inconsistent encoding for 'dest', needs future investigation
-            try:
-               dest_u = unicode(dest, "utf-8")
-            except TypeError:
-               # String is already unicode
-               dest_u = dest
-        else:
-            dest_u = dest
+        try:
+           dest = unicode(dest, "utf-8")
+        except TypeError:
+           # String is already unicode
+           pass
             
-        if not os.path.exists(dest_u):
+        if not os.path.exists(dest):
             try:
                 # Try to make the destination path if it doesn't exist
-                os.makedirs(dest_u)
+                os.makedirs(dest)
             except IOError, e:
                 log.exception(e)
                 log.error("Could not move storage for torrent %s since %s does not exist and could not create the directory.", self.torrent_id, dest_u)
                 return False
+
+        dest_bytes = dest.encode('utf-8')
         try:
-            self.handle.move_storage(dest_u)
-        except:
+            # libtorrent needs unicode object if wstrings are enabled, utf8 bytestring otherwise
+            try:
+                self.handle.move_storage(dest)
+            except ArgumentError:
+                self.handle.move_storage(dest_bytes)
+        except Exception, e:
+            log.error("Error calling libtorrent move_storage: %s" % e)
             return False
 
         return True
