@@ -73,12 +73,10 @@ DEFAULT_PREFS = {
     "enc_out_policy": 1,
     "enc_level": 2,
     "enc_prefer_rc4": True,
-    "max_half_open_connections": (lambda: deluge.common.windows_check() and # TODO: fix this, new setting is lt.half_open_limit
-        (lambda: deluge.common.vista_check() and 4 or 8)() or 50)(),
-    "max_connections_per_torrent": -1, # TODO: Rename all these per_torrent options to match new global names?
-    "max_upload_slots_per_torrent": -1, #
-    "max_upload_speed_per_torrent": -1, #
-    "max_download_speed_per_torrent": -1, #
+    "connections_limit_per_torrent": -1,
+    "unchoke_slots_limit_per_torrent": -1,
+    "upload_rate_limit_per_torrent": -1,
+    "download_rate_limit_per_torrent": -1,
     "enabled_plugins": [],
     "add_paused": False,
     "queue_new_to_top": False,
@@ -149,6 +147,10 @@ OLD_PREFS_MAP = {
     "max_download_speed": "lt.download_rate_limit",
     "max_upload_slots_global": "lt.unchoke_slots_limit",
     "max_connections_global": "lt.connections_limit",
+    "max_connections_per_torrent": "connections_limit_per_torrent",
+    "max_upload_slots_per_torrent": "unchoke_slots_limit_per_torrent",
+    "max_upload_speed_per_torrent": "download_rate_limit_per_torrent",
+    "max_download_speed_per_torrent": "upload_rate_limit_per_torrent"
     }
 
 class PreferencesManager(component.Component):
@@ -157,8 +159,6 @@ class PreferencesManager(component.Component):
 
         # Add the libtorrent session_settings to our defaults
         defaults = dict(map(lambda key, val: ("lt." + key, val), default_session_settings.iteritems()))
-        # As of lt 0.16.5, a bug excludes outgoing_ports from the dict, add it
-        defaults.setdefault("lt.outgoing_ports", (0, 0))
         defaults.update(DEFAULT_PREFS)
 
         self.config = deluge.configmanager.ConfigManager("core.conf", defaults)
@@ -192,7 +192,12 @@ class PreferencesManager(component.Component):
         if on_set_func:
             on_set_func(value)
         elif key.startswith("lt."):
-            self.session.set_settings(key[3:], value)
+            self.set_session_setting(key[3:], value)
+
+    def set_session_setting(self, key, value):
+        settings = self.session.get_settings()
+        settings[key] = value
+        self.session.set_settings(settings)
 
     def _on_config_value_change(self, key, value):
         self.do_config_set_func(key, value)
@@ -207,8 +212,8 @@ class PreferencesManager(component.Component):
                 log.debug("Unable to make directory: %s", e)
 
     def _on_set_send_info(self, value):
-        log.debug("Sending anonymous stats..")
         """sends anonymous stats home"""
+        log.debug("Sending anonymous stats..")
         class Send_Info_Thread(threading.Thread):
             def __init__(self, config):
                 self.config = config
@@ -391,9 +396,9 @@ class PreferencesManager(component.Component):
 
     def _on_set_random_outgoing_ports(self, value):
         if value:
-            self.session.set_settings({"outgoing_ports": (0, 0)})
+            self.set_session_setting("outgoing_ports", (0, 0))
         else:
-            self.session.set_settings({"outgoing_ports": self.config["lt.outgoing_ports"]})
+            self.set_session_setting("outgoing_ports", self.config["lt.outgoing_ports"])
 
     # There are several libtorrent session_settings that we manipulate before sending to libtorrent
     def _on_set_lt_outgoing_ports(self, value):
@@ -401,14 +406,14 @@ class PreferencesManager(component.Component):
 
     def _on_set_lt_peer_tos(self, value):
         try:
-            self.session.set_settings({"peer_tos": chr(int(value, 16))})
+            self.set_session_setting("peer_tos", chr(int(value, 16)))
         except ValueError, e:
             log.debug("Invalid tos byte: %s", e)
             return
 
     def _on_set_lt_seed_time_limit(self, value):
         # This value is stored in minutes in deluge, but libtorrent wants seconds
-        self.session.set_settings({"seed_time_limit": int(value * 60)})
+        self.set_session_setting("seed_time_limit", int(value * 60))
 
     def _on_set_lt_upload_rate_limit(self, value):
         # We need to convert Kb/s to B/s
@@ -417,7 +422,7 @@ class PreferencesManager(component.Component):
         else:
             v = int(value * 1024)
 
-        self.session.set_settings({"upload_rate_limit": v})
+        self.set_session_setting("upload_rate_limit", v)
 
     def _on_set_lt_download_rate_limit(self, value):
         # We need to convert Kb/s to B/s
@@ -425,4 +430,4 @@ class PreferencesManager(component.Component):
             v = -1
         else:
             v = int(value * 1024)
-        self.session.set_settings({"download_rate_limit": v})
+        self.set_session_setting("download_rate_limit", v)

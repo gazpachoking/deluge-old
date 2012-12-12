@@ -45,7 +45,7 @@ supports.
 
 """
 
-REQUIRED_VERSION = "0.16.1.0"
+REQUIRED_VERSION = "0.16.1.0" # TODO: Require 0.16.6 for bugfixes
 
 def check_version(lt):
     from deluge.common import VersionSplit
