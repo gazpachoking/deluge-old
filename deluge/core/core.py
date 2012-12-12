@@ -85,26 +85,31 @@ class Core(component.Component):
         # due to  GIL issue. https://code.google.com/p/libtorrent/issues/detail?id=369
         # Setting session flags to 1 enables all libtorrent default plugins
         self.session = lt.session(lt.fingerprint("DE", *version), flags=1)
+        # Libtorrent returns a different data type depending on whether it was built with deprecated functions.
+        # Monkey patch the settings function to always return the dict rather than the struct
+        if not isinstance(self.session.settings(), dict):
+            self.session.settings = self.session.get_settings
 
         # Load the session state if available
         self.__load_session_state()
 
-        # Set the user agent
-        self.settings = lt.session_settings()
-        self.settings.user_agent = "Deluge/%(deluge_version)s Libtorrent/%(lt_version)s" % \
-                        { 'deluge_version': deluge.common.get_version(),
-                          'lt_version': self.get_libtorrent_version().rpartition(".")[0] }
-        # Increase the alert queue size so that alerts don't get lost
-        self.settings.alert_queue_size = 10000
-
-        # Set session settings
-        self.settings.send_redundant_have = True
+        # Set our default session settings
+        session_settings = self.session.settings()
+        session_settings = {
+            # Set the user agent
+            "user_agent": "Deluge/%(deluge_version)s Libtorrent/%(lt_version)s" % {
+                'deluge_version': deluge.common.get_version(),
+                'lt_version': self.get_libtorrent_version().rpartition(".")[0]},
+            # Increase the alert queue size so that alerts don't get lost
+            "alert_queue_size": 10000,
+            "send_redundant_have": True,
+            }
         if deluge.common.windows_check():
-            self.settings.disk_io_write_mode = \
-                lt.io_buffer_mode_t.disable_os_cache
-            self.settings.disk_io_read_mode = \
-                lt.io_buffer_mode_t.disable_os_cache
-        self.session.set_settings(self.settings)
+            session_settings.update({
+                "disk_io_write_mode": lt.io_buffer_mode_t.disable_os_cache,
+                "disk_io_read_mode": lt.io_buffer_mode_t.disable_os_cache
+            })
+        self.session.set_settings(session_settings)
 
         # Load metadata extension
         # Note: All libtorrent python bindings to set plugins/extensions need to be disabled
@@ -115,7 +120,7 @@ class Core(component.Component):
 
         # Create the components
         self.eventmanager = EventManager()
-        self.preferencesmanager = PreferencesManager()
+        self.preferencesmanager = PreferencesManager(self.session.settings())
         self.alertmanager = AlertManager()
         self.pluginmanager = PluginManager(self)
         self.torrentmanager = TorrentManager()

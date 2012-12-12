@@ -73,31 +73,18 @@ DEFAULT_PREFS = {
     "enc_out_policy": 1,
     "enc_level": 2,
     "enc_prefer_rc4": True,
-    "max_connections_global": 200,
-    "max_upload_speed": -1.0,
-    "max_download_speed": -1.0,
-    "max_upload_slots_global": 4,
-    "max_half_open_connections": (lambda: deluge.common.windows_check() and
+    "max_half_open_connections": (lambda: deluge.common.windows_check() and # TODO: fix this, new setting is lt.half_open_limit
         (lambda: deluge.common.vista_check() and 4 or 8)() or 50)(),
-    "max_connections_per_second": 20,
-    "ignore_limits_on_local_network": True,
-    "max_connections_per_torrent": -1,
-    "max_upload_slots_per_torrent": -1,
-    "max_upload_speed_per_torrent": -1,
-    "max_download_speed_per_torrent": -1,
+    "max_connections_per_torrent": -1, # TODO: Rename all these per_torrent options to match new global names?
+    "max_upload_slots_per_torrent": -1, #
+    "max_upload_speed_per_torrent": -1, #
+    "max_download_speed_per_torrent": -1, #
     "enabled_plugins": [],
     "add_paused": False,
-    "max_active_seeding": 5,
-    "max_active_downloading": 3,
-    "max_active_limit": 8,
-    "dont_count_slow_torrents": False,
     "queue_new_to_top": False,
     "stop_seed_at_ratio": False,
     "remove_seed_at_ratio": False,
     "stop_seed_ratio": 2.00,
-    "share_ratio_limit": 2.00,
-    "seed_time_ratio_limit": 7.00,
-    "seed_time_limit": 180,
     "auto_managed": True,
     "move_completed": False,
     "move_completed_path": deluge.common.get_default_download_dir(),
@@ -133,27 +120,55 @@ DEFAULT_PREFS = {
         },
 
     },
-    "outgoing_ports": [0, 0],
     "random_outgoing_ports": True,
-    "peer_tos": "0x00",
-    "rate_limit_ip_overhead": True,
     "geoip_db_location": "/usr/share/GeoIP/GeoIP.dat",
-    "cache_size": 512,
-    "cache_expiry": 60,
-    "auto_manage_prefer_seeds": False,
     "shared": False
 }
 
+OLD_PREFS_MAP = {
+    # Old migration
+    "public": "shared",
+    # Migrate libtorrent session_settings to have lt prefix
+    "peer_tos": "lt.peer_tos",
+    "max_connections_per_second": "lt.connection_speed",
+    "ignore_limits_on_local_network": "lt.ignore_limits_on_local_network",
+    "share_ratio_limit": "lt.share_ratio_limit",
+    "seed_time_ratio_limit": "lt.seed_time_ratio_limit",
+    "seed_time_limit": "lt.seed_time_limit", # *60
+    "max_active_downloading": "lt.active_downloads",
+    "max_active_seeding": "lt.active_seeds",
+    "max_active_limit": "lt.active_limit",
+    "dont_count_slow_torrents": "lt.dont_count_slow_torrents",
+    "rate_limit_ip_overhead": "lt.rate_limit_ip_overhead",
+    "cache_size": "lt.cache_size",
+    "cache_expiry": "lt.cache_expiry",
+    "auto_manage_prefer_seeds": "lt.auto_manage_prefer_seeds",
+    "outgoing_ports": "lt.outgoing_ports",
+    "max_half_open_connections": "lt.half_open_limit",
+    "max_upload_speed": "lt.upload_rate_limit",
+    "max_download_speed": "lt.download_rate_limit",
+    "max_upload_slots_global": "lt.unchoke_slots_limit",
+    "max_connections_global": "lt.connections_limit",
+    }
+
 class PreferencesManager(component.Component):
-    def __init__(self):
+    def __init__(self, default_session_settings):
         component.Component.__init__(self, "PreferencesManager")
 
-        self.config = deluge.configmanager.ConfigManager("core.conf", DEFAULT_PREFS)
-        if 'public' in self.config:
-            log.debug("Updating configuration file: Renamed torrent's public "
-                      "attribute to shared.")
-            self.config["shared"] = self.config["public"]
-            del self.config["public"]
+        # Add the libtorrent session_settings to our defaults
+        defaults = dict(map(lambda key, val: ("lt." + key, val), default_session_settings.iteritems()))
+        # As of lt 0.16.5, a bug excludes outgoing_ports from the dict, add it
+        defaults.setdefault("lt.outgoing_ports", (0, 0))
+        defaults.update(DEFAULT_PREFS)
+
+        self.config = deluge.configmanager.ConfigManager("core.conf", defaults)
+        # Migrate any old settings to their new name
+        for key in OLD_PREFS_MAP:
+            if key in self.config:
+                log.debug("Updating configuration file: Renamed %s to %s" %
+                    (key, OLD_PREFS_MAP[key]))
+                self.config[OLD_PREFS_MAP[key]] = self.config[key]
+                del self.config[key]
 
     def start(self):
         self.core = component.get("Core")
@@ -172,27 +187,71 @@ class PreferencesManager(component.Component):
 
     # Config set functions
     def do_config_set_func(self, key, value):
-        on_set_func = getattr(self, "_on_set_" + key, None)
+        log.debug("%s set to %s", key, value)
+        on_set_func = getattr(self, "_on_set_" + key.replace(".", "_"), None)
         if on_set_func:
-            on_set_func(key, value)
-
-    def session_set_setting(self, key, value):
-        settings = self.session.settings()
-        setattr(settings, key, value)
-        self.session.set_settings(settings)
+            on_set_func(value)
+        elif key.startswith("lt."):
+            self.session.set_settings(key[3:], value)
 
     def _on_config_value_change(self, key, value):
         self.do_config_set_func(key, value)
         component.get("EventManager").emit(ConfigValueChangedEvent(key, value))
 
-    def _on_set_torrentfiles_location(self, key, value):
+    # These are pure deluge settings
+    def _on_set_torrentfiles_location(self, value):
         if self.config["copy_torrent_file"]:
             try:
                 os.makedirs(value)
             except Exception, e:
                 log.debug("Unable to make directory: %s", e)
 
-    def _on_set_listen_ports(self, key, value):
+    def _on_set_send_info(self, value):
+        log.debug("Sending anonymous stats..")
+        """sends anonymous stats home"""
+        class Send_Info_Thread(threading.Thread):
+            def __init__(self, config):
+                self.config = config
+                threading.Thread.__init__(self)
+            def run(self):
+                import time
+                now = time.time()
+                # check if we've done this within the last week or never
+                if (now - self.config["info_sent"]) >= (60 * 60 * 24 * 7):
+                    import deluge.common
+                    from urllib import quote_plus
+                    from urllib2 import urlopen
+                    import platform
+                    try:
+                        url = "http://deluge-torrent.org/stats_get.php?processor=" +\
+                              platform.machine() + "&python=" + platform.python_version()\
+                              + "&deluge=" + deluge.common.get_version()\
+                              + "&os=" + platform.system()\
+                              + "&plugins=" + quote_plus(":".join(self.config["enabled_plugins"]))
+                        urlopen(url)
+                    except IOError, e:
+                        log.debug("Network error while trying to send info: %s", e)
+                    else:
+                        self.config["info_sent"] = now
+        if value:
+            Send_Info_Thread(self.config).start()
+
+    def _on_set_new_release_check(self, value):
+        if value:
+            log.debug("Checking for new release..")
+            threading.Thread(target=self.core.get_new_release).start()
+            if self.new_release_timer and self.new_release_timer.running:
+                self.new_release_timer.stop()
+                # Set a timer to check for a new release every 3 days
+            self.new_release_timer = LoopingCall(
+                self._on_set_new_release_check, "new_release_check", True)
+            self.new_release_timer.start(72 * 60 * 60, False)
+        else:
+            if self.new_release_timer and self.new_release_timer.running:
+                self.new_release_timer.stop()
+
+    # These are libtorrent settings not part of session_settings
+    def _on_set_listen_ports(self, value):
         # Only set the listen ports if random_port is not true
         if self.config["random_port"] is not True:
             log.debug("listen port range set to %s-%s", value[0], value[1])
@@ -200,12 +259,11 @@ class PreferencesManager(component.Component):
                 value[0], value[1], str(self.config["listen_interface"])
             )
 
-    def _on_set_listen_interface(self, key, value):
+    def _on_set_listen_interface(self, value):
         # Call the random_port callback since it'll do what we need
         self._on_set_random_port("random_port", self.config["random_port"])
 
-    def _on_set_random_port(self, key, value):
-        log.debug("random port value set to %s", value)
+    def _on_set_random_port(self, value):
         # We need to check if the value has been changed to true and false
         # and then handle accordingly.
         if value:
@@ -225,25 +283,7 @@ class PreferencesManager(component.Component):
             str(self.config["listen_interface"])
         )
 
-    def _on_set_outgoing_ports(self, key, value):
-        if not self.config["random_outgoing_ports"]:
-            log.debug("outgoing port range set to %s-%s", value[0], value[1])
-            self.session_set_setting("outgoing_ports", (value[0], value[1]))
-
-    def _on_set_random_outgoing_ports(self, key, value):
-        if value:
-            self.session.outgoing_ports(0, 0)
-
-    def _on_set_peer_tos(self, key, value):
-        log.debug("setting peer_tos to: %s", value)
-        try:
-            self.session_set_setting("peer_tos", chr(int(value, 16)))
-        except ValueError, e:
-            log.debug("Invalid tos byte: %s", e)
-            return
-
-    def _on_set_dht(self, key, value):
-        log.debug("dht value set to %s", value)
+    def _on_set_dht(self, value):
         state_file = deluge.configmanager.get_config_dir("dht.state")
         if value:
             state = None
@@ -264,46 +304,42 @@ class PreferencesManager(component.Component):
             self.core.save_dht_state()
             self.session.stop_dht()
 
-    def _on_set_upnp(self, key, value):
-        log.debug("upnp value set to %s", value)
+    def _on_set_upnp(self, value):
         if value:
             self.session.start_upnp()
         else:
             self.session.stop_upnp()
 
-    def _on_set_natpmp(self, key, value):
-        log.debug("natpmp value set to %s", value)
+    def _on_set_natpmp(self, value):
         if value:
             self.session.start_natpmp()
         else:
             self.session.stop_natpmp()
 
-    def _on_set_lsd(self, key, value):
-        log.debug("lsd value set to %s", value)
+    def _on_set_lsd(self, value):
         if value:
             self.session.start_lsd()
         else:
             self.session.stop_lsd()
 
-    def _on_set_utpex(self, key, value):
-        log.debug("utpex value set to %s", value)
+    def _on_set_utpex(self, value):
         if value:
             # Note: All libtorrent python bindings to set plugins/extensions need to be disabled
             # due to  GIL issue. https://code.google.com/p/libtorrent/issues/detail?id=369
             #self.session.add_extension(lt.create_ut_pex_plugin)
             pass
 
-    def _on_set_enc_in_policy(self, key, value):
-        self._on_set_encryption(key, value)
+    def _on_set_enc_in_policy(self, value):
+        self._on_set_encryption("enc_in_policy", value)
 
-    def _on_set_enc_out_policy(self, key, value):
-        self._on_set_encryption(key, value)
+    def _on_set_enc_out_policy(self, value):
+        self._on_set_encryption("enc_out_policy", value)
 
-    def _on_set_enc_level(self, key, value):
-        self._on_set_encryption(key, value)
+    def _on_set_enc_level(self, value):
+        self._on_set_encryption("enc_level", value)
 
-    def _on_set_enc_prefer_rc4(self, key, value):
-        self._on_set_encryption(key, value)
+    def _on_set_enc_prefer_rc4(self, value):
+        self._on_set_encryption("enc_prefer_rc4", value)
 
     def _on_set_encryption(self, key, value):
         log.debug("encryption value %s set to %s..", key, value)
@@ -322,116 +358,7 @@ class PreferencesManager(component.Component):
             set.allowed_enc_level,
             set.prefer_rc4)
 
-    def _on_set_max_connections_global(self, key, value):
-        log.debug("max_connections_global set to %s..", value)
-        self.session.set_max_connections(value)
-
-    def _on_set_max_upload_speed(self, key, value):
-        log.debug("max_upload_speed set to %s..", value)
-        # We need to convert Kb/s to B/s
-        if value < 0:
-            v = -1
-        else:
-            v = int(value * 1024)
-
-        self.session.set_upload_rate_limit(v)
-
-    def _on_set_max_download_speed(self, key, value):
-        log.debug("max_download_speed set to %s..", value)
-        # We need to convert Kb/s to B/s
-        if value < 0:
-            v = -1
-        else:
-            v = int(value * 1024)
-        self.session.set_download_rate_limit(v)
-
-    def _on_set_max_upload_slots_global(self, key, value):
-        log.debug("max_upload_slots_global set to %s..", value)
-        self.session.set_max_uploads(value)
-
-    def _on_set_max_half_open_connections(self, key, value):
-        self.session.set_max_half_open_connections(value)
-
-    def _on_set_max_connections_per_second(self, key, value):
-        self.session_set_setting("connection_speed", value)
-
-    def _on_set_ignore_limits_on_local_network(self, key, value):
-        self.session_set_setting("ignore_limits_on_local_network", value)
-
-    def _on_set_share_ratio_limit(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("share_ratio_limit", value)
-
-    def _on_set_seed_time_ratio_limit(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("seed_time_ratio_limit", value)
-
-    def _on_set_seed_time_limit(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        # This value is stored in minutes in deluge, but libtorrent wants seconds
-        self.session_set_setting("seed_time_limit", int(value * 60))
-
-    def _on_set_max_active_downloading(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("active_downloads", value)
-
-    def _on_set_max_active_seeding(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("active_seeds", value)
-
-    def _on_set_max_active_limit(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("active_limit", value)
-
-    def _on_set_dont_count_slow_torrents(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("dont_count_slow_torrents", value)
-
-    def _on_set_send_info(self, key, value):
-        log.debug("Sending anonymous stats..")
-        """sends anonymous stats home"""
-        class Send_Info_Thread(threading.Thread):
-            def __init__(self, config):
-                self.config = config
-                threading.Thread.__init__(self)
-            def run(self):
-                import time
-                now = time.time()
-                # check if we've done this within the last week or never
-                if (now - self.config["info_sent"]) >= (60 * 60 * 24 * 7):
-                    import deluge.common
-                    from urllib import quote_plus
-                    from urllib2 import urlopen
-                    import platform
-                    try:
-                        url = "http://deluge-torrent.org/stats_get.php?processor=" + \
-                            platform.machine() + "&python=" + platform.python_version() \
-                            + "&deluge=" + deluge.common.get_version() \
-                            + "&os=" + platform.system() \
-                            + "&plugins=" + quote_plus(":".join(self.config["enabled_plugins"]))
-                        urlopen(url)
-                    except IOError, e:
-                        log.debug("Network error while trying to send info: %s", e)
-                    else:
-                        self.config["info_sent"] = now
-        if value:
-            Send_Info_Thread(self.config).start()
-
-    def _on_set_new_release_check(self, key, value):
-        if value:
-            log.debug("Checking for new release..")
-            threading.Thread(target=self.core.get_new_release).start()
-            if self.new_release_timer and self.new_release_timer.running:
-                self.new_release_timer.stop()
-            # Set a timer to check for a new release every 3 days
-            self.new_release_timer = LoopingCall(
-                self._on_set_new_release_check, "new_release_check", True)
-            self.new_release_timer.start(72 * 60 * 60, False)
-        else:
-            if self.new_release_timer and self.new_release_timer.running:
-                self.new_release_timer.stop()
-
-    def _on_set_proxies(self, key, value):
+    def _on_set_proxies(self, value):
         for k, v in value.items():
             if v["type"]:
                 proxy_settings = lt.proxy_settings()
@@ -443,12 +370,7 @@ class PreferencesManager(component.Component):
                 log.debug("setting %s proxy settings", k)
                 getattr(self.session, "set_%s_proxy" % k)(proxy_settings)
 
-    def _on_set_rate_limit_ip_overhead(self, key, value):
-        log.debug("%s: %s", key, value)
-        self.session_set_setting("rate_limit_ip_overhead", value)
-
-    def _on_set_geoip_db_location(self, key, value):
-        log.debug("%s: %s", key, value)
+    def _on_set_geoip_db_location(self, value):
         # Load the GeoIP DB for country look-ups if available
         geoip_db = ""
         if os.path.exists(value):
@@ -467,14 +389,40 @@ class PreferencesManager(component.Component):
                 log.error("Unable to load geoip database!")
                 log.exception(e)
 
-    def _on_set_cache_size(self, key, value):
-        log.debug("%s: %s", key, value)
-        self.session_set_setting("cache_size", value)
+    def _on_set_random_outgoing_ports(self, value):
+        if value:
+            self.session.set_settings({"outgoing_ports": (0, 0)})
+        else:
+            self.session.set_settings({"outgoing_ports": self.config["lt.outgoing_ports"]})
 
-    def _on_set_cache_expiry(self, key, value):
-        log.debug("%s: %s", key, value)
-        self.session_set_setting("cache_expiry", value)
+    # There are several libtorrent session_settings that we manipulate before sending to libtorrent
+    def _on_set_lt_outgoing_ports(self, value):
+        self._on_set_random_outgoing_ports(self.config["random_outgoing_ports"])
 
-    def _on_auto_manage_prefer_seeds(self, key, value):
-        log.debug("%s set to %s..", key, value)
-        self.session_set_setting("auto_manage_prefer_seeds", value)
+    def _on_set_lt_peer_tos(self, value):
+        try:
+            self.session.set_settings({"peer_tos": chr(int(value, 16))})
+        except ValueError, e:
+            log.debug("Invalid tos byte: %s", e)
+            return
+
+    def _on_set_lt_seed_time_limit(self, value):
+        # This value is stored in minutes in deluge, but libtorrent wants seconds
+        self.session.set_settings({"seed_time_limit": int(value * 60)})
+
+    def _on_set_lt_upload_rate_limit(self, value):
+        # We need to convert Kb/s to B/s
+        if value < 0:
+            v = -1
+        else:
+            v = int(value * 1024)
+
+        self.session.set_settings({"upload_rate_limit": v})
+
+    def _on_set_lt_download_rate_limit(self, value):
+        # We need to convert Kb/s to B/s
+        if value < 0:
+            v = -1
+        else:
+            v = int(value * 1024)
+        self.session.set_settings({"download_rate_limit": v})
