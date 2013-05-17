@@ -63,6 +63,8 @@ TRACKER_PIX = {
     "Error": "tracker_warning",
 }
 
+def _(message): return message
+
 TR_LABEL = {
     "label": _("Labels"),
     "owner": _("Owner"),
@@ -76,6 +78,8 @@ TR_LABEL = {
     "Error": _("Error"),
     "Queued": _("Queued"),
 }
+
+del _
 
 FILTER_COLUMN = 5
 
@@ -184,7 +188,7 @@ class FilterTreeView(component.Component):
         #create missing cat_nodes
         for cat in filter_items:
             if not cat in self.cat_nodes:
-                self.cat_nodes[cat] = self.treestore.append(None, ["cat", cat, TR_LABEL.get(cat, _(cat)), 0, None, False])
+                self.cat_nodes[cat] = self.treestore.append(None, ["cat", cat, _(TR_LABEL.get(cat, cat)), 0, None, False])
 
         #update rows
         visible_filters = []
@@ -230,7 +234,7 @@ class FilterTreeView(component.Component):
                 elif cat == "label":
                     label = _("No Label")
             elif cat in ["state", "tracker_host", "label"]:
-                label = TR_LABEL.get(value, _(value))
+                label = _(TR_LABEL.get(value, value))
 
             row = self.treestore.append(self.cat_nodes[cat],[cat, value, label, count , pix, True])
             self.filters[(cat, value)] = row
